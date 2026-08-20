@@ -3,3 +3,4 @@ config.py
 autotrader/state/
 __pycache__/
 trades.db
+.pytest_cache/
