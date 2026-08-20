@@ -1,6 +1,6 @@
-# Alpaca Buy-and-Hold Deployment
+# GreenScreen
 
-Automated deployment script for a validated buy-and-hold equity strategy, executing trades via the Alpaca Trading API.
+Automated deployment script for a validated buy-and-hold equity strategy, executing trades via the Alpaca Trading API — plus an autonomous, research-driven trading engine (see `autotrader/`) that proposes and executes further trades within hard-coded risk guardrails.
 
 ## Strategy
 Equal-weighted (20% each) buy-and-hold across 5 large-cap equities: AAPL, MSFT, JPM, XOM, JNJ.

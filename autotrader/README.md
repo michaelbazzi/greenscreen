@@ -1,4 +1,4 @@
-# autotrader
+# GreenScreen — autotrader
 
 Autonomous, research-driven paper trading on top of the core buy-and-hold
 strategy (`../deploy.py`) and manual executor (`../execute_trade.py`). This

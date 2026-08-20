@@ -51,7 +51,7 @@ fi
 
 SUMMARY_LINE="$(grep '^SUMMARY:' "$LOG_FILE" | tail -n1)"
 if [ -n "$SUMMARY_LINE" ]; then
-    osascript -e "display notification \"${SUMMARY_LINE#SUMMARY:}\" with title \"Autotrader: $RUN_ID\"" >/dev/null 2>&1
+    osascript -e "display notification \"${SUMMARY_LINE#SUMMARY:}\" with title \"GreenScreen: $RUN_ID\"" >/dev/null 2>&1
 else
-    osascript -e "display notification \"Cycle $RUN_ID finished with no SUMMARY line - check the log\" with title \"Autotrader: $RUN_ID\"" >/dev/null 2>&1
+    osascript -e "display notification \"Cycle $RUN_ID finished with no SUMMARY line - check the log\" with title \"GreenScreen: $RUN_ID\"" >/dev/null 2>&1
 fi
