@@ -47,15 +47,25 @@ def make_snapshot(cash, portfolio_value, positions=None):
 
 
 def make_signals(current_price=110.0, sma20=100.0, return_5d=0.03,
-                  avg_dollar_volume=10_000_000, trading_days_available=250):
-    """current_price > sma20 and positive return_5d => a healthy technical
-    score comfortably above both thresholds, unless a test overrides it."""
+                  avg_dollar_volume=10_000_000, trading_days_available=250,
+                  sma50=None, sma200=None, rsi14=None, atr_pct=None, volume_ratio=None):
+    """current_price > sma20 and positive return_5d => trend/momentum lean
+    bullish by default. The newer components (sma50/sma200/rsi14/atr_pct/
+    volume_ratio) default to None, which technical_score() treats as
+    neutral (0.5) - so a test that only cares about trend/momentum doesn't
+    need to know about the other five components, and a fully-flat call
+    (current_price == sma20, return_5d == 0) still scores exactly 0.5."""
     return {
         "ticker": "TEST",
         "current_price": current_price,
         "sma20": sma20,
+        "sma50": sma50,
+        "sma200": sma200,
         "return_5d": return_5d,
         "avg_dollar_volume": avg_dollar_volume,
+        "rsi14": rsi14,
+        "atr_pct": atr_pct,
+        "volume_ratio": volume_ratio,
         "trading_days_available": trading_days_available,
         "first_bar_date": None,
     }
@@ -143,7 +153,10 @@ def test_buy_rejects_new_ticker_with_insufficient_history(conn, monkeypatch):
 
 
 def test_buy_rejects_new_ticker_when_at_max_tickers_held(conn, monkeypatch):
-    monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: make_signals())
+    # Needs to clear the new-ticker score threshold (0.75) so this
+    # test actually exercises the max-tickers-held check, not an earlier
+    # score-threshold rejection.
+    monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: _signals_with_score(0.90))
     positions = {
         f"T{i}": make_position(market_value=10.0)
         for i in range(rp.MAX_TICKERS_HELD)
@@ -154,7 +167,10 @@ def test_buy_rejects_new_ticker_when_at_max_tickers_held(conn, monkeypatch):
 
 
 def test_buy_uses_wider_criteria_and_smaller_cap_for_new_tickers(conn, monkeypatch):
-    monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: make_signals())
+    # Needs a score comfortably above the *new-ticker* threshold (0.75) so
+    # the trade-size-cap rejection below is actually what's under test,
+    # not an earlier score-threshold rejection.
+    monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: _signals_with_score(0.90))
     snapshot = make_snapshot(cash=5000, portfolio_value=1000, positions={})
     # new-ticker cap is smaller than the existing-holding cap
     just_over_new_cap = 1000 * rp.MAX_TRADE_PCT_NEW_TICKER + 1
@@ -195,7 +211,9 @@ def test_buy_rejects_when_daily_notional_cap_reached(conn, monkeypatch):
 # --- evaluate_buy: sector exposure --------------------------------------
 
 def test_buy_rejects_exceeding_sector_exposure_cap(conn, monkeypatch):
-    monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: make_signals())
+    # MSFT isn't held yet here, so it needs the new-ticker threshold (0.75)
+    # cleared for the sector-cap rejection below to be what's under test.
+    monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: _signals_with_score(0.90))
     # AAPL and MSFT are both tagged "technology" in risk_params
     already_held = 1000 * rp.MAX_SECTOR_EXPOSURE_PCT - 5
     positions = {"AAPL": make_position(market_value=already_held)}
@@ -237,14 +255,38 @@ def test_sell_approved_within_held_value():
 
 def _signals_with_score(target_score, sma20=100.0):
     """Reverse-engineer signals that produce exactly `target_score` from
-    technical_score()'s formula (0.5 * trend_norm + 0.5 * momentum_norm,
-    each independently mapped from a +/-10% range to [0,1]). Drives trend
-    and momentum to the same normalized value so their average equals the
-    target exactly, rather than skewing one dimension and risking clamping
-    at the +/-10% edges."""
-    raw = target_score * 0.20 - 0.10  # inverse of the (+0.10)/0.20 mapping
-    current_price = sma20 * (1 + raw)
-    return make_signals(current_price=current_price, sma20=sma20, return_5d=raw)
+    technical_score()'s formula. Drives all seven components to the same
+    normalized value (`target_score` itself) - since the component weights
+    sum to 1.0, a weighted average of seven identical values equals that
+    value exactly, regardless of how the weight is split among them. Much
+    simpler than solving the weighted-sum equation for one or two inputs,
+    and immune to any future rebalancing of _WEIGHTS in market_data.py."""
+    t = target_score
+
+    trend_raw = t * 0.20 - 0.10  # inverse of _normalize(x, -0.10, 0.10)
+    current_price = sma20 * (1 + trend_raw)
+
+    return_5d = t * 0.20 - 0.10  # same +/-10% range as trend
+
+    rsi14 = t * 100  # inverse of _normalize(x, 0, 100)
+
+    trend50_raw = t * 0.30 - 0.15  # inverse of _normalize(x, -0.15, 0.15)
+    sma50 = current_price / (1 + trend50_raw)
+
+    trend200_raw = t * 0.40 - 0.20  # inverse of _normalize(x, -0.20, 0.20)
+    sma200 = current_price / (1 + trend200_raw)
+
+    # volatility is inverted in technical_score (lower ATR scores higher),
+    # so the normalize() output needs to equal (1 - t), not t.
+    atr_pct = 0.005 + (1 - t) * (0.08 - 0.005)
+
+    volume_ratio = 0.5 + t * 1.0  # inverse of _normalize(x, 0.5, 1.5)
+
+    return make_signals(
+        current_price=current_price, sma20=sma20, return_5d=return_5d,
+        sma50=sma50, sma200=sma200, rsi14=rsi14, atr_pct=atr_pct,
+        volume_ratio=volume_ratio,
+    )
 
 
 def test_rotation_rejected_when_disabled(conn, monkeypatch):
