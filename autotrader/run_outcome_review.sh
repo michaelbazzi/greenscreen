@@ -21,7 +21,11 @@ LOG_FILE="$LOG_DIR/outcomes-$TS.log"
 
 SUMMARY_LINE="$(grep '^SUMMARY:' "$LOG_FILE" | tail -n1)"
 if [ -n "$SUMMARY_LINE" ]; then
-    osascript -e "display notification \"${SUMMARY_LINE#SUMMARY:}\" with title \"GreenScreen: weekly outcome review\"" >/dev/null 2>&1
+    NOTIFY_BODY="${SUMMARY_LINE#SUMMARY:}"
 else
-    osascript -e "display notification \"Weekly review ran but produced no summary - check the log\" with title \"GreenScreen: weekly outcome review\"" >/dev/null 2>&1
+    NOTIFY_BODY="Weekly review ran but produced no summary - check the log"
 fi
+
+osascript -e "display notification \"$NOTIFY_BODY\" with title \"GreenScreen: weekly outcome review\"" >/dev/null 2>&1
+/Users/MichaelBazzi/trading-env/bin/python3 autotrader/notify_email.py \
+    "GreenScreen weekly outcome review" "$NOTIFY_BODY" >/dev/null 2>&1 || true

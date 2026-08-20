@@ -51,7 +51,11 @@ fi
 
 SUMMARY_LINE="$(grep '^SUMMARY:' "$LOG_FILE" | tail -n1)"
 if [ -n "$SUMMARY_LINE" ]; then
-    osascript -e "display notification \"${SUMMARY_LINE#SUMMARY:}\" with title \"GreenScreen: $RUN_ID\"" >/dev/null 2>&1
+    NOTIFY_BODY="${SUMMARY_LINE#SUMMARY:}"
 else
-    osascript -e "display notification \"Cycle $RUN_ID finished with no SUMMARY line - check the log\" with title \"GreenScreen: $RUN_ID\"" >/dev/null 2>&1
+    NOTIFY_BODY="Cycle $RUN_ID finished with no SUMMARY line - check the log"
 fi
+
+osascript -e "display notification \"$NOTIFY_BODY\" with title \"GreenScreen: $RUN_ID\"" >/dev/null 2>&1
+/Users/MichaelBazzi/trading-env/bin/python3 autotrader/notify_email.py \
+    "GreenScreen cycle $RUN_ID" "$NOTIFY_BODY" >/dev/null 2>&1 || true
