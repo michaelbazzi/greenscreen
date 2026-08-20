@@ -1,2 +1,5 @@
 *.env
 config.py
+autotrader/state/
+__pycache__/
+trades.db

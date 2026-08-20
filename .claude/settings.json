@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/Users/MichaelBazzi/trading-env/bin/python3 autotrader/propose_trade.py *)",
+      "Bash(/Users/MichaelBazzi/trading-env/bin/python3 autotrader/market_data.py *)",
+      "WebSearch",
+      "WebFetch"
+    ],
+    "deny": [
+      "Bash(rm *)",
+      "Bash(sudo *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(git push*)",
+      "Bash(git commit*)",
+      "Bash(*config.py*)",
+      "Edit",
+      "Write",
+      "NotebookEdit"
+    ]
+  }
+}
