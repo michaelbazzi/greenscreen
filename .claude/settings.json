@@ -3,6 +3,7 @@
     "allow": [
       "Bash(/Users/MichaelBazzi/trading-env/bin/python3 autotrader/propose_trade.py *)",
       "Bash(/Users/MichaelBazzi/trading-env/bin/python3 autotrader/market_data.py *)",
+      "Bash(/Users/MichaelBazzi/trading-env/bin/python3 autotrader/screen_candidates.py *)",
       "WebSearch",
       "WebFetch"
     ],

@@ -59,3 +59,20 @@ WEEKLY_DRAWDOWN_CIRCUIT_BREAKER_PCT = -0.15
 
 # --- Run coordination -----------------------------------------------------
 RUN_LOCK_STALE_MINUTES = 30      # a lockfile older than this is treated as abandoned
+
+# --- Rotation (sell a held position to fund a better-looking candidate) ----
+# The primary way this account deploys new capital into new ideas, since it
+# never receives fresh deposits - a plain buy will almost always fail the
+# cash-reserve check otherwise. Live as of 2026-08-20.
+#
+# No calendar-based cooldown by design: the technical score is built from
+# daily bars (5-day return, price vs. 20-day SMA) and can't meaningfully
+# shift within a single trading day across this system's 4 intraday
+# cycles, so a same-day reversal is already close to mechanically
+# impossible. An arbitrary time limit on top of that would block a
+# genuinely correct decision for no reason tied to actual conditions - the
+# score-edge requirement below is the real, live-data-grounded protection
+# against chasing noise.
+ROTATION_ENABLED = True
+ROTATION_MIN_SCORE_EDGE = 0.15   # candidate's technical score must beat the
+                                  # weakest holding's score by at least this much

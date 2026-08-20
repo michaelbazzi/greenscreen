@@ -32,7 +32,7 @@ CLAUDE_CODE_OAUTH_TOKEN="$(cat "$TOKEN_FILE")"
 {
     echo "=== cycle $RUN_ID starting $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
     "$CLAUDE_BIN" --print --permission-mode dontAsk \
-        --allowedTools "Bash(/Users/MichaelBazzi/trading-env/bin/python3 autotrader/propose_trade.py *) Bash(/Users/MichaelBazzi/trading-env/bin/python3 autotrader/market_data.py *) WebSearch WebFetch" \
+        --allowedTools "Bash(/Users/MichaelBazzi/trading-env/bin/python3 autotrader/propose_trade.py *) Bash(/Users/MichaelBazzi/trading-env/bin/python3 autotrader/market_data.py *) Bash(/Users/MichaelBazzi/trading-env/bin/python3 autotrader/screen_candidates.py *) WebSearch WebFetch" \
         --settings .claude/settings.json \
         "$PROMPT"
     echo "=== cycle $RUN_ID finished $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
