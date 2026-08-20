@@ -103,6 +103,8 @@ def review_one(conn, decision_id, ticker, action, decision_ts, score):
     print(f"  {ticker} ({action}, {days_elapsed:.0f}d ago, score={score}): "
           f"${price_then:.2f} -> ${price_now:.2f} ({pct_change:+.1%}) — {verdict}")
 
+    return {"ticker": ticker, "action": action, "pct_change": pct_change, "looks_good": looks_good}
+
 
 def main():
     conn = get_connection()
@@ -114,14 +116,32 @@ def main():
 
     if not rows:
         print("No decisions newly eligible for outcome review.")
+        print("SUMMARY: No decisions were newly eligible for review this week.")
         conn.close()
         return
 
     print(f"Reviewing {len(rows)} decision(s) that are >= {REVIEW_AFTER_DAYS} days old:")
+    results = []
     for decision_id, ticker, action, ts, score in rows:
-        review_one(conn, decision_id, ticker, action, ts, score)
-
+        result = review_one(conn, decision_id, ticker, action, ts, score)
+        if result:
+            results.append(result)
     conn.close()
+
+    if not results:
+        print("SUMMARY: Reviewed decisions but couldn't price any of them - see log.")
+        return
+
+    good_count = sum(1 for r in results if r["looks_good"])
+    best = max(results, key=lambda r: r["pct_change"])
+    worst = min(results, key=lambda r: r["pct_change"])
+    avg_pct = sum(r["pct_change"] for r in results) / len(results)
+
+    print(
+        f"SUMMARY: Reviewed {len(results)} decision(s) - {good_count}/{len(results)} "
+        f"look good in hindsight. Best: {best['ticker']} {best['pct_change']:+.1%}. "
+        f"Worst: {worst['ticker']} {worst['pct_change']:+.1%}. Avg: {avg_pct:+.1%}."
+    )
 
 
 if __name__ == "__main__":

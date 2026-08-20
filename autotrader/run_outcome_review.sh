@@ -19,5 +19,9 @@ LOG_FILE="$LOG_DIR/outcomes-$TS.log"
     echo "=== outcome review finished $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
 } >> "$LOG_FILE" 2>&1
 
-REVIEWED_COUNT="$(grep -c '^  ' "$LOG_FILE" 2>/dev/null || echo 0)"
-osascript -e "display notification \"Reviewed $REVIEWED_COUNT decision(s) from the past week. Log: $(basename "$LOG_FILE")\" with title \"GreenScreen: weekly outcome review\"" >/dev/null 2>&1
+SUMMARY_LINE="$(grep '^SUMMARY:' "$LOG_FILE" | tail -n1)"
+if [ -n "$SUMMARY_LINE" ]; then
+    osascript -e "display notification \"${SUMMARY_LINE#SUMMARY:}\" with title \"GreenScreen: weekly outcome review\"" >/dev/null 2>&1
+else
+    osascript -e "display notification \"Weekly review ran but produced no summary - check the log\" with title \"GreenScreen: weekly outcome review\"" >/dev/null 2>&1
+fi
