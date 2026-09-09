@@ -46,15 +46,19 @@ def make_snapshot(cash, portfolio_value, positions=None):
     }
 
 
-def make_signals(current_price=110.0, sma20=100.0, return_5d=0.03,
+def make_signals(current_price=110.0, sma20=100.0, return_5d=0.06,
                   avg_dollar_volume=10_000_000, trading_days_available=250,
                   sma50=None, sma200=None, rsi14=None, atr_pct=None, volume_ratio=None):
     """current_price > sma20 and positive return_5d => trend/momentum lean
-    bullish by default. The newer components (sma50/sma200/rsi14/atr_pct/
-    volume_ratio) default to None, which technical_score() treats as
-    neutral (0.5) - so a test that only cares about trend/momentum doesn't
-    need to know about the other five components, and a fully-flat call
-    (current_price == sma20, return_5d == 0) still scores exactly 0.5."""
+    bullish by default, clearing TECH_SCORE_THRESHOLD_EXISTING (0.60) under
+    the current _WEIGHTS with a small margin - callers that only care about
+    downstream gate checks (sizing, caps, reserve) rely on this default
+    scoring high enough that the score check itself never fires. The newer
+    components (sma50/sma200/rsi14/atr_pct/volume_ratio) default to None,
+    which technical_score() treats as neutral (0.5) - so a test that only
+    cares about trend/momentum doesn't need to know about the other five
+    components, and a fully-flat call (current_price == sma20, return_5d ==
+    0) still scores exactly 0.5."""
     return {
         "ticker": "TEST",
         "current_price": current_price,

@@ -157,19 +157,20 @@ def compute_signals(ticker):
     }
 
 
-# Component weights - must sum to 1.0. Short-term trend/momentum still
-# carry the most weight (the original two-input score, validated across
-# tonight's live runs); the newer components add context without
-# dominating: is this move confirmed by broader trend structure, healthy
-# momentum (not overextended), real volume, and reasonable volatility.
+# Component weights - must sum to 1.0. Backtest-calibrated (volatility/
+# volume-weighted, reduced RSI/momentum) after comparing this scheme against
+# the prior trend/momentum-heavy default across three historical regimes -
+# see greenscreen-backtest/results/regime_comparison_*.json and
+# regime_compare.py in that repo for the evidence and methodology. Fixed,
+# human-reviewed; not something the research step adjusts.
 _WEIGHTS = {
-    "trend20": 0.20,
-    "momentum5": 0.15,
-    "rsi14": 0.15,
+    "trend20": 0.15,
+    "momentum5": 0.10,
+    "rsi14": 0.10,
     "trend50": 0.15,
     "trend200": 0.15,
-    "volatility": 0.10,
-    "volume": 0.10,
+    "volatility": 0.20,
+    "volume": 0.15,
 }
 
 

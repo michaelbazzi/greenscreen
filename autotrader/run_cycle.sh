@@ -16,8 +16,11 @@ mkdir -p "$LOG_DIR"
 RUN_ID="$(date -u +%Y-%m-%dT%H%M%S)"
 LOG_FILE="$LOG_DIR/$RUN_ID.log"
 
+RECENT_OUTCOMES="$(/Users/MichaelBazzi/trading-env/bin/python3 autotrader/format_recent_outcomes.py)"
+
 PROMPT="$(cat "$PROMPT_FILE")"
 PROMPT="${PROMPT//\{\{RUN_ID\}\}/$RUN_ID}"
+PROMPT="${PROMPT//\{\{RECENT_OUTCOMES\}\}/$RECENT_OUTCOMES}"
 
 if [ "${1:-}" = "--dry-run" ]; then
     PROMPT="$PROMPT

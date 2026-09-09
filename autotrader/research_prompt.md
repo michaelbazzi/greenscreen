@@ -39,7 +39,53 @@ Follow these steps in order:
    penny-stock spikes), and it's on you plus the downstream gate to filter
    that out, not to chase every big percentage move.
 
-4. **Research.** For each currently held ticker, and any promising new
+4. **Context from past performance.** Two sources of real data, given as
+   input to your own reasoning below - neither is a directive to prefer
+   any particular ticker or lean bullish/bearish.
+
+   - **Recent outcomes.** {{RECENT_OUTCOMES}}
+
+     This is a small sample (currently zero to a handful of reviewed
+     decisions) - don't weight it heavily against the four research
+     dimensions below. It'll become more informative as more decisions
+     age past the 7-day review window.
+
+   - **Backtest: scoring-weight sensitivity across regimes.** A backtest
+     (`greenscreen-backtest/regime_compare.py`) compared the current
+     `market_data.py` `_WEIGHTS` (volatility/volume-weighted, reduced
+     RSI/momentum - already the live default, this is not a proposal to
+     change it) against the prior trend/momentum-heavy default, across
+     three regimes, same engine/universe/feed for every cell:
+
+     | Regime | Weights | CAGR | Sharpe | Max drawdown |
+     |---|---|---|---|---|
+     | R1 pre-COVID bull (2017-06 to 2020-01) | prior default | 10.70% | 0.498 | -38.62% |
+     | R1 pre-COVID bull (2017-06 to 2020-01) | current (live) | 23.83% | 1.396 | -17.87% |
+     | R2 COVID crash + 2022 bear (2020-02 to 2022-12) | prior default | -8.47% | -0.650 | -26.01% |
+     | R2 COVID crash + 2022 bear (2020-02 to 2022-12) | current (live) | 13.25% | 0.562 | -34.01% |
+     | R3 recent (2023-01 to 2026-08) | prior default | 40.82% | 1.331 | -36.38% |
+     | R3 recent (2023-01 to 2026-08) | current (live) | 24.81% | 1.055 | -32.17% |
+
+     Read honestly, not spun: the current weighting beat the prior default
+     on CAGR and Sharpe in R1 *and* stayed profitable through R2 while the
+     prior default lost money there - though its R2 drawdown was actually
+     deeper (-34% vs -26%), so "stayed profitable" isn't the same as
+     "smoother ride." In R3 (the most recent, largely-bullish stretch) the
+     prior default's CAGR and Sharpe were both stronger - some upside was
+     genuinely given up for R2's downside protection. Separately, and using
+     the current live weighting throughout: the live engine itself drew
+     down *more* than a passive buy-and-hold through the COVID crash
+     specifically (-39.2% vs -31.6%, 2020-02-18 to 2020-04-15), but gained
+     +8.7% across 2022 while buy-and-hold lost -19.6%.
+
+     None of this changes how a candidate gets scored - `propose_trade.py`
+     independently recomputes the technical score from the fixed, human-set
+     `_WEIGHTS` no matter what you conclude here. This is context for your
+     own rationale: e.g. how much weight to put on momentum-driven
+     enthusiasm for a candidate versus signs of it being a shakier, more
+     volatile move, especially if broader conditions look stretched.
+
+5. **Research.** For each currently held ticker, and any promising new
    candidate from the screen above, check all four of these using WebSearch/
    WebFetch (skip a dimension for a ticker only if search genuinely turns up
    nothing usable — don't silently drop it because it's inconvenient):
@@ -72,7 +118,7 @@ Follow these steps in order:
    confident your rationale is or how many of the four checks lean bullish.
    Don't try to talk it into anything; just give your honest read.
 
-5. **Propose.** You have two ways to act on a candidate:
+6. **Propose.** You have two ways to act on a candidate:
 
    - `.../propose_trade.py propose buy/sell TICKER --notional N --rationale "..." --run-id {{RUN_ID}} [--source-url ...] [--sector ...]`
      A plain, cash-funded buy, or a sell of something you hold. **This
@@ -104,7 +150,7 @@ Follow these steps in order:
    rejected proposal with a different framing to try to get it approved.
    You may propose at most a handful of ideas per run — quality over volume.
 
-6. **Summarize.** End your final message with a line starting exactly with
+7. **Summarize.** End your final message with a line starting exactly with
    `SUMMARY:` followed by one sentence covering what ran, what executed
    (if anything), and what was rejected (if anything) and why. This gets
    parsed out for a desktop notification, so keep it to one sentence.
