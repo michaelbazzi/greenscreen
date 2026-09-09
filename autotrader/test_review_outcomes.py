@@ -77,6 +77,30 @@ def test_review_one_computes_correct_pct_change_and_logs_outcome(conn, monkeypat
     assert row == ("AAPL", "buy", 100.0, 110.0, pytest.approx(0.10), 0.80)
 
 
+def test_action_breakdown_splits_by_type():
+    results = [
+        {"ticker": "AAPL", "action": "buy", "pct_change": 0.05, "looks_good": True},
+        {"ticker": "MSFT", "action": "buy", "pct_change": -0.02, "looks_good": False},
+        {"ticker": "JPM", "action": "sell", "pct_change": 0.03, "looks_good": False},
+        {"ticker": "XOM", "action": "sell", "pct_change": -0.01, "looks_good": True},
+        {"ticker": "JNJ", "action": "sell", "pct_change": 0.02, "looks_good": False},
+    ]
+    assert ro._action_breakdown(results) == {"buy": (1, 2), "sell": (1, 3)}
+
+
+def test_action_breakdown_omits_absent_action_type():
+    results = [{"ticker": "AAPL", "action": "buy", "pct_change": 0.05, "looks_good": True}]
+    breakdown = ro._action_breakdown(results)
+    assert breakdown == {"buy": (1, 1)}
+    assert "sell" not in breakdown
+
+
+def test_format_breakdown_renders_readable_fragment():
+    assert ro._format_breakdown({"buy": (3, 3), "sell": (0, 10)}) == "buys: 3/3, sells: 0/10"
+    assert ro._format_breakdown({"buy": (1, 1)}) == "buys: 1/1"
+    assert ro._format_breakdown({}) == ""
+
+
 def test_review_one_skips_when_price_unavailable(conn, monkeypatch):
     ts = _log(conn, "AAPL", "buy", days_ago=10)
     monkeypatch.setattr(ro.md, "get_bars", lambda ticker, lookback_days=None: [])

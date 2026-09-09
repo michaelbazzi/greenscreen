@@ -14,10 +14,7 @@
       "Bash(wget *)",
       "Bash(git push*)",
       "Bash(git commit*)",
-      "Bash(*config.py*)",
-      "Edit",
-      "Write",
-      "NotebookEdit"
+      "Bash(*config.py*)"
     ]
   }
 }

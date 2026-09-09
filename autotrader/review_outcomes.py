@@ -106,6 +106,24 @@ def review_one(conn, decision_id, ticker, action, decision_ts, score):
     return {"ticker": ticker, "action": action, "pct_change": pct_change, "looks_good": looks_good}
 
 
+def _action_breakdown(results):
+    """{'buy': (good, total), 'sell': (good, total)} - only for action types
+    that actually appear this week, so an all-sell week doesn't print a
+    misleading '0/0 buys'."""
+    breakdown = {}
+    for action in ("buy", "sell"):
+        subset = [r for r in results if r["action"] == action]
+        if subset:
+            good = sum(1 for r in subset if r["looks_good"])
+            breakdown[action] = (good, len(subset))
+    return breakdown
+
+
+def _format_breakdown(breakdown):
+    """'buys: 3/3, sells: 0/10' - empty string if breakdown is empty."""
+    return ", ".join(f"{action}s: {good}/{total}" for action, (good, total) in breakdown.items())
+
+
 def main():
     conn = get_connection()
     init_decisions_table(conn)
@@ -133,13 +151,14 @@ def main():
         return
 
     good_count = sum(1 for r in results if r["looks_good"])
+    breakdown_str = _format_breakdown(_action_breakdown(results))
     best = max(results, key=lambda r: r["pct_change"])
     worst = min(results, key=lambda r: r["pct_change"])
     avg_pct = sum(r["pct_change"] for r in results) / len(results)
 
     print(
         f"SUMMARY: Reviewed {len(results)} decision(s) - {good_count}/{len(results)} "
-        f"look good in hindsight. Best: {best['ticker']} {best['pct_change']:+.1%}. "
+        f"look good in hindsight ({breakdown_str}). Best: {best['ticker']} {best['pct_change']:+.1%}. "
         f"Worst: {worst['ticker']} {worst['pct_change']:+.1%}. Avg: {avg_pct:+.1%}."
     )
 
