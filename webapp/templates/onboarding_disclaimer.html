@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="step-nav">1. Alpaca · 2. AI provider · 3. Risk settings · <span class="current">4. Confirm</span></div>
+<h1>Before your first cycle</h1>
+<div class="disclaimer">
+  <p><strong>This is experimental software, not licensed financial advice.</strong> An LLM proposes trades; a deterministic gate independently checks every proposal against your risk settings before anything executes — but the software can still be wrong, and you are responsible for your own decisions about using it.</p>
+  <p><strong>Paper trading only.</strong> No live-money path exists in this account.</p>
+</div>
+<form method="post" action="/onboarding/disclaimer">
+  <label style="display:flex; align-items:center; gap:8px; font-weight:400; margin-top:20px;">
+    <input type="checkbox" name="ack_checkbox" style="width:auto;" required>
+    I understand this is experimental software, paper trading only, and not financial advice.
+  </label>
+  <input type="hidden" name="acknowledged" value="yes">
+  <p><button type="submit">Start using GreenScreen</button></p>
+</form>
+{% endblock %}

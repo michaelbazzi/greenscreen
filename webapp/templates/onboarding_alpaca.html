@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="step-nav"><span class="current">1. Alpaca</span> · 2. AI provider · 3. Risk settings · 4. Confirm</div>
+<h1>Connect your Alpaca account</h1>
+<p class="lead">Paper trading keys only, for now — <a href="https://app.alpaca.markets" target="_blank" rel="noopener">app.alpaca.markets</a> → Paper Trading → API Keys. Your keys are encrypted before they're ever written to disk.</p>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<form method="post" action="/onboarding/connect-alpaca">
+  <label for="api_key">API Key ID</label>
+  <input type="text" id="api_key" name="api_key" required>
+  <label for="api_secret">API Secret</label>
+  <input type="password" id="api_secret" name="api_secret" required>
+  <p><button type="submit">Connect and continue</button></p>
+</form>
+{% endblock %}

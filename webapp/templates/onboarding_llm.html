@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<div class="step-nav">1. Alpaca · <span class="current">2. AI provider</span> · 3. Risk settings · 4. Confirm</div>
+<h1>Connect your AI provider</h1>
+<p class="lead">The research step runs on whatever LLM you choose — bring your own API key. Usage is yours, not run on anyone else's account.</p>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<form method="post" action="/onboarding/connect-llm">
+  <label for="llm_provider">Provider</label>
+  <select id="llm_provider" name="llm_provider" required>
+    <option value="anthropic/claude-sonnet-4-5">Anthropic (Claude)</option>
+    <option value="openai/gpt-4.1">OpenAI (GPT)</option>
+    <option value="gemini/gemini-2.5-pro">Google (Gemini)</option>
+  </select>
+  <label for="llm_api_key">API Key</label>
+  <input type="password" id="llm_api_key" name="llm_api_key" required>
+  <p><button type="submit">Connect and continue</button></p>
+</form>
+{% endblock %}

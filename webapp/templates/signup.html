@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block wrap_class %}narrow{% endblock %}
+{% block content %}
+<h1>Sign up</h1>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<form method="post" action="/signup">
+  <label for="email">Email</label>
+  <input type="email" id="email" name="email" required>
+  <label for="password">Password</label>
+  <input type="password" id="password" name="password" required minlength="8">
+  <p class="hint">At least 8 characters.</p>
+  <p><button type="submit">Create account</button></p>
+</form>
+<p class="hint">Already have an account? <a href="/login">Log in</a></p>
+{% endblock %}

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}GreenScreen{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav>
+    <a href="/">GreenScreen</a>
+    {% if request.cookies.get("greenscreen_session") %}
+    <form method="post" action="/logout"><button type="submit" class="btn-ghost">Log out</button></form>
+    {% endif %}
+  </nav>
+  <div class="wrap {% block wrap_class %}{% endblock %}">
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

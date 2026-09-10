@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+{% set descriptions = {
+  "MAX_POSITION_PCT": "Max % of your portfolio in any one ticker",
+  "MAX_TRADE_PCT": "Max % of portfolio in a single order",
+  "MAX_TRADE_PCT_NEW_TICKER": "Max % per order for a ticker you don't already hold",
+  "MIN_CASH_RESERVE_PCT": "Never let a buy push cash below this % of portfolio value",
+  "STOP_LOSS_PCT": "Auto-sell an existing holding at this loss (negative number)",
+  "STOP_LOSS_PCT_NEW_TICKER": "Wider stop-loss for newly-admitted, higher-volatility names",
+  "MAX_NEW_POSITIONS_PER_DAY": "Max new buys per day (stop-loss sells don't count)",
+  "MAX_DAILY_NOTIONAL_DEPLOYED_PCT": "Max total new spend per day, as % of portfolio",
+  "MAX_TICKERS_HELD": "Max number of different tickers held at once",
+  "MAX_SECTOR_EXPOSURE_PCT": "Max % of portfolio in one sector",
+  "MAX_SECTOR_EXPOSURE_PCT_UNKNOWN": "Tighter sector cap for untagged tickers",
+  "NEW_TICKER_MIN_TRADING_DAYS": "Minimum trading history (days) before a new ticker is eligible",
+  "NEW_TICKER_MIN_AVG_DOLLAR_VOLUME": "Minimum average daily $ volume for a new ticker (liquidity floor)",
+  "TECH_SCORE_THRESHOLD_EXISTING": "Min technical score to add to a current holding",
+  "TECH_SCORE_THRESHOLD_NEW": "Min technical score to admit a brand-new ticker",
+  "DAILY_DRAWDOWN_CIRCUIT_BREAKER_PCT": "Daily drawdown that halts new buys (auto-clears next day)",
+  "WEEKLY_DRAWDOWN_CIRCUIT_BREAKER_PCT": "Weekly drawdown that halts new buys (needs manual reset)",
+  "ROTATION_MIN_SCORE_EDGE": "A rotation candidate must beat your weakest holding's score by this much",
+} %}
+<div class="step-nav">1. Alpaca · 2. AI provider · <span class="current">3. Risk settings</span> · 4. Confirm</div>
+<h1>Review your risk settings</h1>
+<p class="lead">Pre-filled with the live account's current values — these are <strong>your</strong> numbers, not inherited silently. Review and adjust before saving; nothing runs until you do.</p>
+<form method="post" action="/onboarding/risk-settings">
+  <div class="card">
+    {% for name, value in fields %}
+    <label for="{{ name }}">{{ name }}</label>
+    <input type="number" step="any" id="{{ name }}" name="{{ name }}" value="{{ value }}" required>
+    <p class="hint">{{ descriptions.get(name, "") }}</p>
+    {% endfor %}
+  </div>
+  <p><button type="submit">Save and continue</button></p>
+</form>
+{% endblock %}

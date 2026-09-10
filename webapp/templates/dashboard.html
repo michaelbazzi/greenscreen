@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="card stat-row">
+  <div class="stat">
+    <div class="label">Portfolio value</div>
+    <div class="value">${{ "%.2f"|format(snapshot.portfolio_value) }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Cash</div>
+    <div class="value">${{ "%.2f"|format(snapshot.cash) }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Positions held</div>
+    <div class="value">{{ snapshot.positions|length }}</div>
+  </div>
+</div>
+
+<h2>Positions</h2>
+<div class="card">
+  {% if snapshot.positions %}
+  <table>
+    <tr><th>Ticker</th><th>Qty</th><th>Market value</th><th>Entry price</th><th>Current price</th></tr>
+    {% for symbol, pos in snapshot.positions.items() %}
+    <tr>
+      <td>{{ symbol }}</td>
+      <td>{{ pos.qty }}</td>
+      <td>${{ "%.2f"|format(pos.market_value|float) }}</td>
+      <td>${{ "%.2f"|format(pos.avg_entry_price|float) }}</td>
+      <td>${{ "%.2f"|format(pos.current_price|float) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="hint">No positions yet — nothing's run a cycle for this account so far.</p>
+  {% endif %}
+</div>
+
+<h2>Recent decisions</h2>
+<div class="card">
+  {% if decisions %}
+  <table>
+    <tr><th>When</th><th>Ticker</th><th>Action</th><th>Score</th><th>Result</th></tr>
+    {% for ts, ticker, action, score, passed, reason in decisions %}
+    <tr>
+      <td>{{ ts[:16] }}</td>
+      <td>{{ ticker }}</td>
+      <td>{{ action }}</td>
+      <td>{{ "%.2f"|format(score) if score is not none else "—" }}</td>
+      <td>
+        {% if passed %}
+        <span class="pill pill-good">approved</span>
+        {% else %}
+        <span class="pill pill-bad" title="{{ reason }}">rejected</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="hint">No decisions logged yet — this account hasn't run a research cycle. Cycles run automatically on market hours once onboarding is complete.</p>
+  {% endif %}
+</div>
+{% endblock %}
