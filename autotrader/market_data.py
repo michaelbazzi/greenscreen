@@ -23,14 +23,16 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from alpaca.data.enums import DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 
-from config import API_KEY, API_SECRET
+from config_loader import load_credentials
 
+API_KEY, API_SECRET = load_credentials()
 _data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
 
 # ~200 trading days for the 200-day SMA needs roughly 290 calendar days;
