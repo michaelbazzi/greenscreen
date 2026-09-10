@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-execute_trade.py — general-purpose execution layer for ChipsandChairs (PA374B18P4DK)
+execute_trade.py — general-purpose execution layer for the paper account
+configured in config.py (currently PA3D3WAKC861, "New Paper Account")
 
 Separate from deploy.py intentionally: deploy.py is the validated buy-and-hold
 allocator and stays untouched. This script executes individual trades from any
@@ -23,7 +24,6 @@ capital later.
 """
 
 import argparse
-import sqlite3
 import sys
 import time
 from datetime import datetime, timezone
@@ -34,6 +34,7 @@ from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus
 
 from config import API_KEY, API_SECRET
+from autotrader.db import get_connection, init_decisions_table, log_trade, export_csv
 
 # --- Safety rail ---------------------------------------------------------
 PAPER_ONLY = True
@@ -43,52 +44,11 @@ REPO_DIR = Path(__file__).resolve().parent
 DB_PATH = REPO_DIR / "trades.db"
 CSV_PATH = REPO_DIR / "trades.csv"
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS trades (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp_utc TEXT NOT NULL,
-    account_id TEXT NOT NULL,
-    ticker TEXT NOT NULL,
-    side TEXT NOT NULL,
-    order_type TEXT NOT NULL,
-    shares REAL,
-    notional REAL,
-    limit_price REAL,
-    fill_price REAL,
-    status TEXT NOT NULL,
-    order_id TEXT NOT NULL,
-    paper_account INTEGER NOT NULL
-);
-"""
-
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute(SCHEMA)
-    conn.commit()
+    conn = get_connection(DB_PATH)
+    init_decisions_table(conn)  # also creates the trades table; WAL-enabled
     return conn
-
-
-def log_trade(conn, row):
-    conn.execute(
-        """INSERT INTO trades
-           (timestamp_utc, account_id, ticker, side, order_type,
-            shares, notional, limit_price, fill_price, status, order_id, paper_account)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-        row,
-    )
-    conn.commit()
-
-
-def export_csv(conn):
-    import csv as csv_module
-
-    cur = conn.execute("SELECT * FROM trades ORDER BY id")
-    cols = [d[0] for d in cur.description]
-    with open(CSV_PATH, "w", newline="") as f:
-        writer = csv_module.writer(f)
-        writer.writerow(cols)
-        writer.writerows(cur.fetchall())
 
 
 def confirm_live_or_exit(paper_flag):

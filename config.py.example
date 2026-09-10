@@ -1,0 +1,6 @@
+# Copy this file to config.py and fill in your own Alpaca paper-trading
+# API keys (https://app.alpaca.markets -> Paper Trading -> API Keys).
+# config.py is gitignored - never commit real keys.
+
+API_KEY = "your-alpaca-paper-api-key"
+API_SECRET = "your-alpaca-paper-api-secret"
