@@ -6,3 +6,4 @@ id,timestamp_utc,account_id,ticker,side,order_type,shares,notional,limit_price,f
 5,2026-08-21T16:01:36.676880+00:00,9f6a2d7c-fb31-4134-b43a-fb1dff759f10,AAPL,sell,market,,30.0,,,OrderStatus.PENDING_NEW,3aa8775d-1ff7-42d3-852d-1f7c9e035779,1
 6,2026-08-22T19:54:31.469504+00:00,9f6a2d7c-fb31-4134-b43a-fb1dff759f10,AAPL,sell,market,,40.0,,,OrderStatus.ACCEPTED,f1f0a881-1b44-4915-8827-67978aeba1a7,1
 7,2026-09-07T13:47:38.704298+00:00,9f6a2d7c-fb31-4134-b43a-fb1dff759f10,AAPL,sell,market,,40.0,,,OrderStatus.ACCEPTED,ef4f111e-d269-47f7-9857-6d1bef27a2fe,1
+8,2026-09-11T19:47:28.409965+00:00,9f6a2d7c-fb31-4134-b43a-fb1dff759f10,JNJ,sell,market,,40.0,,,OrderStatus.PENDING_NEW,d4fc800e-4e4c-4e2b-a5af-9c51c932fec8,1
