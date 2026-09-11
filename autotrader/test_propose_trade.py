@@ -255,6 +255,14 @@ def test_sell_approved_within_held_value():
     assert reason is None
 
 
+def test_sell_rejects_manually_held_ticker(monkeypatch):
+    monkeypatch.setattr(rp, "MANUALLY_HELD_TICKERS", {"BTCUSD"})
+    positions = {"BTCUSD": make_position(market_value=100.0)}
+    snapshot = make_snapshot(cash=0, portfolio_value=1000, positions=positions)
+    reason = pt.evaluate_sell(snapshot, "BTCUSD", 40.0)
+    assert "manually held" in reason
+
+
 # --- evaluate_rotation ----------------------------------------------------
 
 def _signals_with_score(target_score, sma20=100.0):
@@ -306,6 +314,15 @@ def test_rotation_rejected_when_from_ticker_not_held(conn, monkeypatch):
     snapshot = make_snapshot(cash=100, portfolio_value=1000, positions={})
     _, _, reason = pt.evaluate_rotation(snapshot, "JPM", "MRNA", 40.0, None, conn)
     assert "not currently held" in reason
+
+
+def test_rotation_rejected_when_from_ticker_manually_held(conn, monkeypatch):
+    monkeypatch.setattr(rp, "ROTATION_ENABLED", True)
+    monkeypatch.setattr(rp, "MANUALLY_HELD_TICKERS", {"BTCUSD"})
+    positions = {"BTCUSD": make_position(market_value=100.0)}
+    snapshot = make_snapshot(cash=100, portfolio_value=1000, positions=positions)
+    _, _, reason = pt.evaluate_rotation(snapshot, "BTCUSD", "MRNA", 40.0, None, conn)
+    assert "manually held" in reason
 
 
 def test_rotation_rejected_when_from_is_not_weakest_holding(conn, monkeypatch):

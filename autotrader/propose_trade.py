@@ -227,6 +227,8 @@ def cmd_sweep_stop_loss(args):
         return
 
     for symbol, pos in snapshot["positions"].items():
+        if symbol in rp.MANUALLY_HELD_TICKERS:
+            continue
         entry = float(pos.avg_entry_price)
         current = float(pos.current_price)
         plpc = (current - entry) / entry
@@ -338,6 +340,8 @@ def evaluate_buy(snapshot, ticker, notional, sector_arg, conn, skip_cash_reserve
 
 
 def evaluate_sell(snapshot, ticker, notional):
+    if ticker in rp.MANUALLY_HELD_TICKERS:
+        return f"{ticker} is manually held - excluded from all automated sells"
     if notional < rp.MIN_ORDER_NOTIONAL:
         return f"notional ${notional:.2f} below floor ${rp.MIN_ORDER_NOTIONAL:.2f}"
     pos = snapshot["positions"].get(ticker)
@@ -367,6 +371,9 @@ def evaluate_rotation(snapshot, from_ticker, to_ticker, notional, sector_arg, co
 
     if from_ticker == to_ticker:
         return None, None, "from and to tickers are the same"
+
+    if from_ticker in rp.MANUALLY_HELD_TICKERS:
+        return None, None, f"{from_ticker} is manually held - excluded from all automated sells"
 
     from_pos = snapshot["positions"].get(from_ticker)
     if from_pos is None:

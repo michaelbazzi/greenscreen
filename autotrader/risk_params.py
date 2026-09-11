@@ -21,6 +21,15 @@ MIN_ORDER_NOTIONAL = 10.0        # reject dust orders under $10
 STOP_LOSS_PCT = -0.15            # core (already-held) positions
 STOP_LOSS_PCT_NEW_TICKER = -0.20  # wider stop for newly-admitted, higher-volatility names
 
+# --- Manually-held positions (hands-off for the automated system) --------
+# Tickers in this set are excluded from ALL automated sell paths - the
+# stop-loss sweep, an explicit sell proposal, and rotation (as the FROM
+# leg) - regardless of price movement or technical score. For a position
+# the account holder bought and manages themselves, not something the
+# autonomous system is meant to touch at all. Add/remove tickers here as
+# needed; empty by default (nothing is excluded unless explicitly listed).
+MANUALLY_HELD_TICKERS = {"BTCUSD"}  # bought manually 2026-09-10, hands-off by request
+
 # --- Daily/volume caps -----------------------------------------------------
 MAX_NEW_POSITIONS_PER_DAY = 4    # new BUYs only; stop-loss sells are exempt/uncapped
 MAX_DAILY_NOTIONAL_DEPLOYED_PCT = 0.30  # total new spend per day, as % of portfolio value
