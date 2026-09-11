@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from alpaca.data.enums import DataFeed
+from alpaca.data.enums import Adjustment, DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
@@ -59,6 +59,15 @@ def get_bars(ticker, lookback_days=LOOKBACK_DAYS):
         start=start,
         end=end,
         feed=DataFeed.IEX,  # free/paper subscriptions can't query recent SIP data
+        # Without this, Alpaca defaults to RAW (unadjusted) prices, so a
+        # split (e.g. NVDA's 2024 10:1) reads as a fake ~-90% overnight
+        # crash - close/sma/etc. all snap to a tenth of their prior value
+        # in one bar, which would false-trigger the stop-loss sweep on any
+        # held position in that ticker. SPLIT-adjusts historical prices so
+        # a split reads as what it is (no real price change), while still
+        # not adjusting for dividends (a separate, deliberate choice - see
+        # GreenScreen-backtest's README for the full disclosure).
+        adjustment=Adjustment.SPLIT,
     )
     bars = _data_client.get_stock_bars(request)
     frame = bars.data.get(ticker, [])

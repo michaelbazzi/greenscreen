@@ -182,6 +182,24 @@ def test_buy_uses_wider_criteria_and_smaller_cap_for_new_tickers(conn, monkeypat
     assert "max trade size" in reason
 
 
+def test_buy_at_exact_max_trade_cap_is_not_rejected_by_rounding(conn, monkeypatch):
+    """Regression: notional and portfolio_value * max_trade_pct can differ
+    by sub-cent floating-point noise even when both represent the same
+    rounded dollar amount (a caller typically computes notional as
+    round(portfolio_value * some_pct, 2)) - comparing unrounded floats
+    could reject a trade sized at exactly the cap with a self-contradictory
+    message like "$41.06 exceeds max trade size $41.06". Found via
+    GreenScreen-backtest regime testing: a post-liquidation account sizing
+    every trade at exactly MAX_TRADE_PCT_NEW_TICKER hit this on nearly
+    every attempt, real portfolio value below."""
+    monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: _signals_with_score(0.90))
+    portfolio_value = 821.1783741004233
+    notional = round(portfolio_value * rp.MAX_TRADE_PCT_NEW_TICKER, 2)
+    snapshot = make_snapshot(cash=portfolio_value, portfolio_value=portfolio_value, positions={})
+    score, reason = pt.evaluate_buy(snapshot, "NEWTICKER", notional, "technology", conn)
+    assert reason is None, f"a trade sized at exactly the cap must not be rejected: {reason}"
+
+
 # --- evaluate_buy: daily caps -------------------------------------------
 
 def test_buy_rejects_when_daily_buy_count_reached(conn, monkeypatch):

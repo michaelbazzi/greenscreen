@@ -293,10 +293,18 @@ def evaluate_buy(snapshot, ticker, notional, sector_arg, conn, skip_cash_reserve
         return score, f"technical score {score:.2f} below threshold {threshold:.2f}"
 
     max_trade_pct = rp.MAX_TRADE_PCT_NEW_TICKER if is_new else rp.MAX_TRADE_PCT
-    if notional > portfolio_value * max_trade_pct:
+    # Round both sides to the cent before comparing - notional arrives
+    # already rounded to the cent from callers, but portfolio_value *
+    # max_trade_pct is an unrounded float, so a trade sized at exactly the
+    # cap could be rejected by sub-cent floating-point noise alone (e.g.
+    # "$41.06 exceeds max trade size $41.06"). Money is never actually
+    # more precise than the cent, so comparing at cent precision is the
+    # correct comparison, not a loosened one.
+    max_trade_notional = round(portfolio_value * max_trade_pct, 2)
+    if round(notional, 2) > max_trade_notional:
         return score, (
             f"notional ${notional:.2f} exceeds max trade size "
-            f"${portfolio_value * max_trade_pct:,.2f} ({max_trade_pct:.0%} of portfolio)"
+            f"${max_trade_notional:,.2f} ({max_trade_pct:.0%} of portfolio)"
         )
 
     existing_value = float(snapshot["positions"][ticker].market_value) if not is_new else 0.0
