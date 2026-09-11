@@ -102,18 +102,21 @@ def test_buy_approved_when_all_checks_pass(conn, monkeypatch):
     assert score >= rp.TECH_SCORE_THRESHOLD_EXISTING
 
 
-# --- evaluate_buy: technical score gate --------------------------------
+# --- evaluate_buy: technical score is informational only (demoted 2026-09-11) --
 
-def test_buy_rejects_below_technical_score_threshold(conn, monkeypatch):
-    # current_price == sma20 and flat return_5d => score lands at 0.5,
-    # below TECH_SCORE_THRESHOLD_EXISTING (0.60 by default)
+def test_buy_approved_regardless_of_low_technical_score(conn, monkeypatch):
+    """Score is still computed and returned (for logging/analysis - see
+    research_scorecard.py) but no longer gates admission: a decade of
+    backtesting found it has no positive, and a mildly negative,
+    correlation with actual forward returns for this universe. Only the
+    risk limits below this point in evaluate_buy can still reject."""
     flat_signals = make_signals(current_price=100.0, sma20=100.0, return_5d=0.0)
     monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: flat_signals)
     positions = {"AAPL": make_position(market_value=100.0)}
     snapshot = make_snapshot(cash=500, portfolio_value=1000, positions=positions)
     score, reason = pt.evaluate_buy(snapshot, "AAPL", 40.0, None, conn)
-    assert score == pytest.approx(0.5)
-    assert "technical score" in reason
+    assert score == pytest.approx(0.5)  # still computed and returned
+    assert reason is None  # but no longer rejected for it
 
 
 # --- evaluate_buy: sizing / position caps ------------------------------

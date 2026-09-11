@@ -54,11 +54,28 @@ TICKER_SECTORS = {
 NEW_TICKER_MIN_TRADING_DAYS = 20         # avoid first-days-of-listing whipsaw
 NEW_TICKER_MIN_AVG_DOLLAR_VOLUME = 5_000_000  # daily $ volume liquidity floor
 
-# --- Deterministic technical-score gate ------------------------------------
-# propose_trade.py computes this score itself from live market data via
-# market_data.py — it is never accepted as a caller-supplied argument.
-TECH_SCORE_THRESHOLD_EXISTING = 0.60     # min score to add to a current holding
-TECH_SCORE_THRESHOLD_NEW = 0.75          # min score to admit a brand-new ticker
+# --- Deterministic technical-score gate (DEMOTED to informational-only,
+# 2026-09-11) ----------------------------------------------------------------
+# propose_trade.py still computes this score itself from live market data
+# via market_data.py on every proposal — it is never accepted as a
+# caller-supplied argument, and it's still logged on every decision — but
+# evaluate_buy no longer REJECTS a proposal for scoring low. GreenScreen-
+# backtest's evidence (a decade of data, in-sample and held-out, composite
+# score and every individual component) found the score has no positive,
+# and a mildly negative, correlation with actual forward returns for this
+# universe. Gating trade admission on a number shown to point the wrong
+# way was doing real harm, not just adding noise. Selection is now the
+# research agent's own judgment call — real-time WebSearch, filings,
+# catalysts — gated only by the risk limits below (cash reserve, position/
+# trade size caps, sector exposure, count/daily caps, stop-loss, circuit
+# breakers), none of which this backtest evidence questioned.
+#
+# These two constants are kept, unused by evaluate_buy, as a record of
+# what the gate used to require and a fast path back if this doesn't pan
+# out - restoring the score check is re-adding the two-line comparison in
+# evaluate_buy, not rederiving these numbers.
+TECH_SCORE_THRESHOLD_EXISTING = 0.60     # historical value - NOT enforced, see above
+TECH_SCORE_THRESHOLD_NEW = 0.75          # historical value - NOT enforced, see above
 
 # --- Circuit breakers ----------------------------------------------------
 # Portfolio-level drawdown limits. Tripping either blocks NEW buys only —
@@ -70,18 +87,20 @@ WEEKLY_DRAWDOWN_CIRCUIT_BREAKER_PCT = -0.15
 RUN_LOCK_STALE_MINUTES = 30      # a lockfile older than this is treated as abandoned
 
 # --- Rotation (sell a held position to fund a better-looking candidate) ----
-# The primary way this account deploys new capital into new ideas, since it
-# never receives fresh deposits - a plain buy will almost always fail the
-# cash-reserve check otherwise. Live as of 2026-08-20.
-#
-# No calendar-based cooldown by design: the technical score is built from
-# daily bars (5-day return, price vs. 20-day SMA) and can't meaningfully
-# shift within a single trading day across this system's 4 intraday
-# cycles, so a same-day reversal is already close to mechanically
-# impossible. An arbitrary time limit on top of that would block a
-# genuinely correct decision for no reason tied to actual conditions - the
-# score-edge requirement below is the real, live-data-grounded protection
-# against chasing noise.
-ROTATION_ENABLED = True
-ROTATION_MIN_SCORE_EDGE = 0.15   # candidate's technical score must beat the
-                                  # weakest holding's score by at least this much
+# DISABLED 2026-09-11 - rotation's entire trigger is a comparison of two
+# technical scores (sell whichever holding scores weakest, buy whichever
+# candidate beats it by ROTATION_MIN_SCORE_EDGE), and GreenScreen-backtest's
+# evidence found that score has no positive - and a mildly negative -
+# correlation with forward returns. A mechanism built entirely on comparing
+# a signal shown to point the wrong way has no principled basis left, same
+# reasoning as demoting evaluate_buy's score gate above. Funding a new idea
+# in this permanently cash-starved account (it never receives fresh
+# deposits) now goes through two independent, ungated research-agent
+# judgment calls instead of one scored swap: an explicit evaluate_sell of
+# whatever holding the agent itself decides no longer merits the position,
+# then a separate evaluate_buy for the new candidate - both gated only by
+# the risk limits, neither by a score comparison. Was live 2026-08-20 to
+# 2026-09-11; ROTATION_MIN_SCORE_EDGE is kept, unused, as a record of what
+# the requirement used to be.
+ROTATION_ENABLED = False
+ROTATION_MIN_SCORE_EDGE = 0.15   # historical value - NOT enforced while rotation is disabled

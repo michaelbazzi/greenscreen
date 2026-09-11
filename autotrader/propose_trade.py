@@ -4,13 +4,18 @@ propose_trade.py — the ONLY path through which the autonomous research loop
 is allowed to place an order. Every other script (or an agent's own Bash/API
 calls) bypassing this file is out of scope for the guardrails below.
 
-Design principle: the research step (a scheduled agent doing web search) may
-pick candidate tickers and write the human-readable rationale, but it CANNOT
-talk its way past execution. This script recomputes a technical score itself
-from live market data (see market_data.py) and gates on that — there is no
---conviction flag a caller can set. Every proposal is logged to the
-`decisions` table whether it's approved or rejected, so rejections are as
-visible as trades.
+Design principle: the research step (a scheduled agent doing web search) picks
+candidate tickers and writes the human-readable rationale - selection is its
+judgment call, not a --conviction flag it hands this script. What it CANNOT
+do is talk its way past the risk limits: cash reserve, position/trade size
+caps, sector exposure, ticker-count and daily caps, the stop-loss sweep, and
+the circuit breakers all still apply to every proposal regardless of how
+compelling the rationale is. (evaluate_buy also still recomputes a technical
+score from live market data on every proposal and logs it - visible for
+analysis - but as of 2026-09-11 that score no longer gates admission; see
+risk_params.py's TECH_SCORE_THRESHOLD_* comment for why.) Every proposal is
+logged to the `decisions` table whether it's approved or rejected, so
+rejections are as visible as trades.
 
 This script is paper-trading only. There is no --live flag here at all —
 unlike execute_trade.py, going live is deliberately not something this
@@ -287,10 +292,14 @@ def evaluate_buy(snapshot, ticker, notional, sector_arg, conn, skip_cash_reserve
         if not ok:
             return md.technical_score(signals), reason
 
+    # Still computed and logged on every decision (so it stays visible for
+    # analysis, e.g. research_scorecard.py's score-bucket breakdown), but no
+    # longer a rejection gate - see risk_params.py's TECH_SCORE_THRESHOLD_*
+    # comment for why (demoted 2026-09-11: shown to have no positive, and a
+    # mildly negative, correlation with actual forward returns). Admission
+    # is now the research agent's own judgment call, gated only by the risk
+    # limits below.
     score = md.technical_score(signals)
-    threshold = rp.TECH_SCORE_THRESHOLD_NEW if is_new else rp.TECH_SCORE_THRESHOLD_EXISTING
-    if score < threshold:
-        return score, f"technical score {score:.2f} below threshold {threshold:.2f}"
 
     max_trade_pct = rp.MAX_TRADE_PCT_NEW_TICKER if is_new else rp.MAX_TRADE_PCT
     # Round both sides to the cent before comparing - notional arrives

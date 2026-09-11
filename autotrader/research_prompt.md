@@ -112,41 +112,51 @@ Follow these steps in order:
 
    Form a view that weighs all four dimensions together, not just the one
    that's easiest to find. Note: your job is to pick *candidates* and
-   explain *why* — you do NOT set the trade's approval. `propose_trade.py`
-   independently recomputes a technical score from live market data and
-   will reject anything that doesn't clear its own bar, no matter how
-   confident your rationale is or how many of the four checks lean bullish.
-   Don't try to talk it into anything; just give your honest read.
+   explain *why* — this is now the real gate, not a formality. As of
+   2026-09-11, `propose_trade.py` no longer rejects a proposal for scoring
+   low on the deterministic technical score (a decade of backtesting found
+   that score has no positive, and a mildly negative, correlation with
+   what actually happens next for this universe — see risk_params.py's
+   TECH_SCORE_THRESHOLD_* comment if you want the detail). It still
+   computes and logs that score on every decision, but it is informational
+   now, not a bar to clear. What still WILL reject you, no matter how
+   confident your rationale is: the cash reserve floor, position/trade
+   size caps, sector exposure caps, ticker-count and daily caps, the
+   stop-loss sweep, and the circuit breakers. Those are real and unrelated
+   to this change. Since the score can no longer catch a genuinely weak
+   pick, your own research is what has to — don't let removing that
+   backstop become a reason to lower your bar.
 
-6. **Propose.** You have two ways to act on a candidate:
+6. **Propose.** Rotation is disabled (2026-09-11 — its entire trigger was
+   a comparison of two technical scores, and that comparison was shown not
+   to predict anything; see risk_params.py). Deploying capital now takes
+   two separate, independent judgment calls instead of one linked swap:
 
-   - `.../propose_trade.py propose buy/sell TICKER --notional N --rationale "..." --run-id {{RUN_ID}} [--source-url ...] [--sector ...]`
-     A plain, cash-funded buy, or a sell of something you hold. **This
-     account never receives new deposits and is permanently cash-starved —
-     a plain BUY will almost always be rejected on the cash-reserve check.**
-     Still use plain `sell` freely for anything you believe should be
-     reduced or exited on its own merits (deteriorated thesis, no longer
-     worth holding) — sells aren't blocked by cash.
+   - `.../propose_trade.py propose sell TICKER --notional N --rationale "..." --run-id {{RUN_ID}}`
+     Sell something you hold because *you've* decided it no longer merits
+     the position — deteriorated thesis, bad news, a better place for the
+     capital. This is not blocked by cash and is not gated by score. **This
+     is now the primary way new capital gets freed up** — the account
+     never receives new deposits, so a plain buy usually needs a prior sell
+     to fund it.
 
-   - `.../propose_trade.py rotate FROM_TICKER TO_TICKER --notional N --rationale "..." --run-id {{RUN_ID}} [--source-url ...] [--sector ...]`
-     Sell a held ticker to fund a new one in a single linked action. **This
-     is the primary way new capital actually gets deployed on this
-     account** — use it whenever you've found a candidate you believe is
-     genuinely stronger than your weakest current holding, not just a
-     plain buy. You don't need to pre-verify which holding is weakest
-     yourself: `propose_trade.py` independently recomputes every held
-     ticker's score and will refuse the rotation and tell you which one
-     actually is weakest if you picked wrong. It will also refuse if the
-     candidate's edge isn't large enough, or if the ticker you're trying
-     to sell hasn't been held long enough yet — both are guardrails
-     working as intended, not something to route around by trying a
-     different pair or a different framing.
+   - `.../propose_trade.py propose buy TICKER --notional N --rationale "..." --run-id {{RUN_ID}} [--source-url ...] [--sector ...]`
+     A plain, cash-funded buy of a new or existing position. Still subject
+     to the cash-reserve floor — if nothing's been sold recently, this will
+     likely be rejected for that, which is the guardrail working as
+     intended, not something to route around.
 
-   Keep notional sizes modest either way — you don't know the exact caps
+   There's no more `rotate` subcommand pairing to reach for — if you want
+   to swap a weak holding for a stronger idea, propose the `sell` and the
+   `buy` as two separate calls, in whichever order makes sense for your
+   reasoning. Each is independently gated by the risk limits above, not by
+   any relationship between the two.
+
+   Keep notional sizes modest — you don't know the exact caps
    `propose_trade.py` will enforce, so there's no reason to try large
    numbers; it will reject anything oversized anyway, so start reasonable
    (tens of dollars, not hundreds). It's fine if some proposals get
-   rejected — that's the guardrail working, not a failure. Do not retry a
+   rejected — that's a guardrail working, not a failure. Do not retry a
    rejected proposal with a different framing to try to get it approved.
    You may propose at most a handful of ideas per run — quality over volume.
 
