@@ -12,7 +12,6 @@
       "Bash(sudo *)",
       "Bash(curl *)",
       "Bash(wget *)",
-      "Bash(git push*)",
       "Bash(*config.py*)"
     ]
   }
