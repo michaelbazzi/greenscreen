@@ -139,37 +139,96 @@ def _drawdown_pct(client, period):
     return (latest - start) / start
 
 
+def _read_breaker_state():
+    """Whatever's on disk, or {} if the file is missing or unreadable. A
+    corrupt state file must not be able to block trading or silently grant
+    full size - both callers treat {} as 'no breaker history'."""
+    if not CIRCUIT_BREAKER_PATH.exists():
+        return {}
+    try:
+        return json.loads(CIRCUIT_BREAKER_PATH.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _record_trip(reason, sticky):
+    """Persist a trip. `last_trip_at` is written for EVERY trip, daily ones
+    included, because it's what the post-clear ramp measures from - the
+    daily breaker otherwise leaves no trace at all once the day rolls over.
+    `sticky` (weekly only) additionally sets the tripped flag that blocks
+    buys until reset-circuit-breaker runs."""
+    state = _read_breaker_state()
+    now = now_iso()
+    state.update({"last_trip_at": now, "last_trip_reason": reason})
+    if sticky:
+        state.update({"tripped": True, "reason": reason, "tripped_at": now})
+    STATE_DIR.mkdir(exist_ok=True)
+    CIRCUIT_BREAKER_PATH.write_text(json.dumps(state))
+
+
+def circuit_breaker_ramp_multiplier():
+    """Scale factor on new-buy size caps: 1.0 normally,
+    CIRCUIT_BREAKER_RAMP_MULTIPLIER for CIRCUIT_BREAKER_RAMP_HOURS after the
+    most recent trip of either kind - whether it's still tripped or was
+    cleared minutes ago. See risk_params.py's CIRCUIT_BREAKER_RAMP_* block."""
+    last_trip_at = _read_breaker_state().get("last_trip_at")
+    if not last_trip_at:
+        return 1.0
+    try:
+        tripped_dt = datetime.fromisoformat(last_trip_at)
+    except (TypeError, ValueError):
+        return 1.0
+    hours_since = (datetime.now(timezone.utc) - tripped_dt).total_seconds() / 3600
+    if hours_since < rp.CIRCUIT_BREAKER_RAMP_HOURS:
+        return rp.CIRCUIT_BREAKER_RAMP_MULTIPLIER
+    return 1.0
+
+
 def check_circuit_breaker(client):
     """Returns (tripped: bool, reason: str | None). Weekly trips persist
     until reset-circuit-breaker is run; daily trips are re-evaluated fresh
-    every call (a new day naturally clears them)."""
-    if CIRCUIT_BREAKER_PATH.exists():
-        state = json.loads(CIRCUIT_BREAKER_PATH.read_text())
-        if state.get("tripped"):
-            return True, f"circuit breaker already tripped: {state.get('reason')} " \
-                          f"(at {state.get('tripped_at')}) — run reset-circuit-breaker to clear"
+    every call (a new day naturally clears them). Either kind also stamps
+    last_trip_at, which outlives the clear and drives the size ramp."""
+    state = _read_breaker_state()
+    if state.get("tripped"):
+        return True, f"circuit breaker already tripped: {state.get('reason')} " \
+                      f"(at {state.get('tripped_at')}) — run reset-circuit-breaker to clear"
 
     weekly_dd = _drawdown_pct(client, "1W")
     if weekly_dd is not None and weekly_dd <= rp.WEEKLY_DRAWDOWN_CIRCUIT_BREAKER_PCT:
         reason = f"weekly drawdown {weekly_dd:.1%} <= {rp.WEEKLY_DRAWDOWN_CIRCUIT_BREAKER_PCT:.1%}"
-        CIRCUIT_BREAKER_PATH.write_text(json.dumps({
-            "tripped": True, "reason": reason, "tripped_at": now_iso(),
-        }))
+        _record_trip(reason, sticky=True)
         return True, reason
 
     daily_dd = _drawdown_pct(client, "1D")
     if daily_dd is not None and daily_dd <= rp.DAILY_DRAWDOWN_CIRCUIT_BREAKER_PCT:
-        return True, f"daily drawdown {daily_dd:.1%} <= {rp.DAILY_DRAWDOWN_CIRCUIT_BREAKER_PCT:.1%} (auto-clears tomorrow)"
+        reason = f"daily drawdown {daily_dd:.1%} <= {rp.DAILY_DRAWDOWN_CIRCUIT_BREAKER_PCT:.1%} (auto-clears tomorrow)"
+        _record_trip(reason, sticky=False)
+        return True, reason
 
     return False, None
 
 
 def cmd_reset_circuit_breaker(args):
-    if CIRCUIT_BREAKER_PATH.exists():
-        CIRCUIT_BREAKER_PATH.unlink()
-        print("Circuit breaker cleared.")
-    else:
+    """Clears the block. Deliberately does NOT clear last_trip_at: sizing
+    stays ramped down for the rest of the ramp window, so clearing the
+    breaker is no longer a one-command jump back to full size."""
+    state = _read_breaker_state()
+    if not state.get("tripped"):
         print("Circuit breaker was not tripped.")
+        return
+
+    for key in ("tripped", "reason", "tripped_at"):
+        state.pop(key, None)
+    CIRCUIT_BREAKER_PATH.write_text(json.dumps(state))
+
+    multiplier = circuit_breaker_ramp_multiplier()
+    if multiplier < 1.0:
+        print(f"Circuit breaker cleared. New-buy sizing stays at {multiplier:.0%} of "
+              f"normal caps until {rp.CIRCUIT_BREAKER_RAMP_HOURS}h after the last trip "
+              f"({state.get('last_trip_at')}).")
+    else:
+        print("Circuit breaker cleared.")
 
 
 # --- Account snapshot --------------------------------------------------------
@@ -212,6 +271,14 @@ def cmd_status(args):
     print(f"Notional deployed today: ${sum_notional_deployed_today(conn, today_str()):,.2f} "
           f"/ ${snapshot['portfolio_value'] * rp.MAX_DAILY_NOTIONAL_DEPLOYED_PCT:,.2f}")
     print(f"Circuit breaker: {'TRIPPED — ' + reason if tripped else 'clear'}")
+    ramp = circuit_breaker_ramp_multiplier()
+    if ramp < 1.0:
+        last_trip = _read_breaker_state().get("last_trip_at")
+        print(f"Buy-size ramp: {ramp:.0%} of normal caps "
+              f"(max trade {rp.MAX_TRADE_PCT * ramp:.1%}, max position {rp.MAX_POSITION_PCT * ramp:.1%}) "
+              f"— within {rp.CIRCUIT_BREAKER_RAMP_HOURS}h of last trip at {last_trip}")
+    else:
+        print("Buy-size ramp: none (full size)")
     print(f"Kill switch (ENABLED): {rp.ENABLED}")
     conn.close()
 
@@ -301,7 +368,14 @@ def evaluate_buy(snapshot, ticker, notional, sector_arg, conn, skip_cash_reserve
     # limits below.
     score = md.technical_score(signals)
 
-    max_trade_pct = rp.MAX_TRADE_PCT_NEW_TICKER if is_new else rp.MAX_TRADE_PCT
+    # Halved (or whatever the multiplier says) for a window after any
+    # circuit-breaker trip, so a cleared breaker ramps back to full size
+    # instead of snapping to it - see risk_params.py CIRCUIT_BREAKER_RAMP_*.
+    ramp = circuit_breaker_ramp_multiplier()
+    ramp_note = (f" [ramped to {ramp:.0%} of normal caps after a recent "
+                 f"circuit-breaker trip]") if ramp < 1.0 else ""
+
+    max_trade_pct = (rp.MAX_TRADE_PCT_NEW_TICKER if is_new else rp.MAX_TRADE_PCT) * ramp
     # Round both sides to the cent before comparing - notional arrives
     # already rounded to the cent from callers, but portfolio_value *
     # max_trade_pct is an unrounded float, so a trade sized at exactly the
@@ -313,14 +387,15 @@ def evaluate_buy(snapshot, ticker, notional, sector_arg, conn, skip_cash_reserve
     if round(notional, 2) > max_trade_notional:
         return score, (
             f"notional ${notional:.2f} exceeds max trade size "
-            f"${max_trade_notional:,.2f} ({max_trade_pct:.0%} of portfolio)"
+            f"${max_trade_notional:,.2f} ({max_trade_pct:.1%} of portfolio){ramp_note}"
         )
 
+    max_position_pct = rp.MAX_POSITION_PCT * ramp
     existing_value = float(snapshot["positions"][ticker].market_value) if not is_new else 0.0
-    if existing_value + notional > portfolio_value * rp.MAX_POSITION_PCT:
+    if existing_value + notional > portfolio_value * max_position_pct:
         return score, (
             f"projected position ${existing_value + notional:,.2f} exceeds "
-            f"max position size ${portfolio_value * rp.MAX_POSITION_PCT:,.2f}"
+            f"max position size ${portfolio_value * max_position_pct:,.2f}{ramp_note}"
         )
 
     if not skip_cash_reserve and snapshot["cash"] - notional < portfolio_value * rp.MIN_CASH_RESERVE_PCT:

@@ -8,6 +8,8 @@ Run with: /Users/MichaelBazzi/trading-env/bin/python3 -m pytest -v
 (from the autotrader/ directory, or anywhere - conftest handles the path)
 """
 
+import json
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -26,6 +28,16 @@ def conn():
     init_decisions_table(c)
     yield c
     c.close()
+
+
+@pytest.fixture(autouse=True)
+def isolated_breaker_state(tmp_path, monkeypatch):
+    """Point circuit-breaker state at an empty tmp dir for EVERY test.
+    evaluate_buy reads it now (for the post-trip size ramp), so without this
+    a real tripped breaker in autotrader/state/ would silently halve the
+    caps every sizing test asserts against."""
+    monkeypatch.setattr(pt, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(pt, "CIRCUIT_BREAKER_PATH", tmp_path / "circuit_breaker.json")
 
 
 def make_position(market_value, avg_entry_price=100.0, current_price=100.0, qty=1.0):
@@ -475,3 +487,161 @@ def test_rotation_rejected_when_buy_leg_fails_sector_cap(conn, monkeypatch):
     _, _, reason = pt.evaluate_rotation(snapshot, "JPM", "MSFT", 40.0, None, conn)
     assert "buy leg would fail" in reason
     assert "sector" in reason
+
+
+# --- circuit-breaker ramp-down -----------------------------------------
+# The gap this closes: a tripped breaker used to resume at FULL size the
+# instant it cleared (daily overnight, weekly via reset-circuit-breaker).
+
+def _fake_client(daily_dd=0.0, weekly_dd=0.0):
+    """Minimal stand-in for the Alpaca client, serving whatever drawdown a
+    test needs from get_portfolio_history. Equity is synthesized as
+    [100, 100*(1+dd)] so _drawdown_pct derives exactly `dd`."""
+    def get_portfolio_history(request):
+        dd = weekly_dd if request.period == "1W" else daily_dd
+        return SimpleNamespace(equity=[100.0, 100.0 * (1 + dd)])
+    return SimpleNamespace(get_portfolio_history=get_portfolio_history)
+
+
+def _write_breaker_state(state):
+    pt.CIRCUIT_BREAKER_PATH.write_text(json.dumps(state))
+
+
+def _hours_ago_iso(hours):
+    return (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+
+
+def test_ramp_multiplier_is_full_size_with_no_trip_history():
+    assert pt.circuit_breaker_ramp_multiplier() == 1.0
+
+
+def test_ramp_multiplier_reduced_inside_the_window_after_a_trip():
+    _write_breaker_state({"last_trip_at": _hours_ago_iso(1)})
+    assert pt.circuit_breaker_ramp_multiplier() == rp.CIRCUIT_BREAKER_RAMP_MULTIPLIER
+
+
+def test_ramp_multiplier_returns_to_full_size_after_the_window():
+    _write_breaker_state({"last_trip_at": _hours_ago_iso(rp.CIRCUIT_BREAKER_RAMP_HOURS + 1)})
+    assert pt.circuit_breaker_ramp_multiplier() == 1.0
+
+
+def test_ramp_multiplier_survives_a_corrupt_state_file():
+    pt.CIRCUIT_BREAKER_PATH.write_text("{not json")
+    assert pt.circuit_breaker_ramp_multiplier() == 1.0
+
+
+def test_daily_trip_is_recorded_even_though_it_does_not_stick():
+    """The daily breaker auto-clears and previously left no trace at all -
+    so there was nothing for a post-clear ramp to measure from."""
+    tripped, reason = pt.check_circuit_breaker(
+        _fake_client(daily_dd=rp.DAILY_DRAWDOWN_CIRCUIT_BREAKER_PCT - 0.01))
+    assert tripped is True
+    assert "daily drawdown" in reason
+    state = json.loads(pt.CIRCUIT_BREAKER_PATH.read_text())
+    assert state["last_trip_at"]           # recorded for the ramp
+    assert state.get("tripped") is None    # but still not sticky
+
+
+def test_weekly_trip_is_both_sticky_and_recorded():
+    tripped, _ = pt.check_circuit_breaker(
+        _fake_client(weekly_dd=rp.WEEKLY_DRAWDOWN_CIRCUIT_BREAKER_PCT - 0.01))
+    assert tripped is True
+    state = json.loads(pt.CIRCUIT_BREAKER_PATH.read_text())
+    assert state["tripped"] is True
+    assert state["last_trip_at"]
+
+
+def test_reset_clears_the_block_but_keeps_the_ramp():
+    """The core of this change: clearing the breaker must not be a
+    one-command jump back to full-size buys."""
+    pt.check_circuit_breaker(_fake_client(weekly_dd=rp.WEEKLY_DRAWDOWN_CIRCUIT_BREAKER_PCT - 0.01))
+    pt.cmd_reset_circuit_breaker(SimpleNamespace())
+
+    state = json.loads(pt.CIRCUIT_BREAKER_PATH.read_text())
+    assert state.get("tripped") is None                     # no longer blocking
+    assert state["last_trip_at"]                             # ramp clock preserved
+    assert pt.circuit_breaker_ramp_multiplier() == rp.CIRCUIT_BREAKER_RAMP_MULTIPLIER
+    # and the breaker really is clear for a subsequent healthy check
+    assert pt.check_circuit_breaker(_fake_client())[0] is False
+
+
+def test_buy_at_normal_cap_is_rejected_while_ramped(conn, monkeypatch):
+    """A trade that would be fine normally is too big during the ramp."""
+    monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: make_signals())
+    positions = {"AAPL": make_position(market_value=100.0)}
+    snapshot = make_snapshot(cash=5000, portfolio_value=1000, positions=positions)
+    at_normal_cap = round(1000 * rp.MAX_TRADE_PCT, 2)
+
+    assert pt.evaluate_buy(snapshot, "AAPL", at_normal_cap, None, conn)[1] is None
+
+    _write_breaker_state({"last_trip_at": _hours_ago_iso(1)})
+    score, reason = pt.evaluate_buy(snapshot, "AAPL", at_normal_cap, None, conn)
+    assert "max trade size" in reason
+    assert "ramped to 50%" in reason
+
+
+def test_halved_buy_still_allowed_while_ramped(conn, monkeypatch):
+    """The ramp reduces size; it does not block buying outright."""
+    monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: make_signals())
+    # Small existing position, so the ramped POSITION cap isn't what binds -
+    # this test is about the per-trade cap specifically.
+    positions = {"AAPL": make_position(market_value=50.0)}
+    snapshot = make_snapshot(cash=5000, portfolio_value=1000, positions=positions)
+    _write_breaker_state({"last_trip_at": _hours_ago_iso(1)})
+
+    ramped_cap = round(1000 * rp.MAX_TRADE_PCT * rp.CIRCUIT_BREAKER_RAMP_MULTIPLIER, 2)
+    assert pt.evaluate_buy(snapshot, "AAPL", ramped_cap, None, conn)[1] is None
+
+
+def test_position_cap_is_also_ramped(conn, monkeypatch):
+    """Both size caps ramp, not just per-trade: otherwise repeated small
+    buys would rebuild a full-size position during the cooldown."""
+    monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: make_signals())
+    # Held value sits between the ramped and normal position caps.
+    held = 1000 * rp.MAX_POSITION_PCT * rp.CIRCUIT_BREAKER_RAMP_MULTIPLIER + 10
+    positions = {"AAPL": make_position(market_value=held)}
+    snapshot = make_snapshot(cash=5000, portfolio_value=1000, positions=positions)
+
+    assert pt.evaluate_buy(snapshot, "AAPL", 20.0, None, conn)[1] is None
+
+    _write_breaker_state({"last_trip_at": _hours_ago_iso(1)})
+    score, reason = pt.evaluate_buy(snapshot, "AAPL", 20.0, None, conn)
+    assert "max position size" in reason
+
+
+def test_ramp_expires_and_full_size_buys_resume(conn, monkeypatch):
+    monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: make_signals())
+    positions = {"AAPL": make_position(market_value=100.0)}
+    snapshot = make_snapshot(cash=5000, portfolio_value=1000, positions=positions)
+    _write_breaker_state({"last_trip_at": _hours_ago_iso(rp.CIRCUIT_BREAKER_RAMP_HOURS + 1)})
+
+    at_normal_cap = round(1000 * rp.MAX_TRADE_PCT, 2)
+    assert pt.evaluate_buy(snapshot, "AAPL", at_normal_cap, None, conn)[1] is None
+
+
+def test_rotation_buy_leg_inherits_the_ramp(conn, monkeypatch):
+    """Rotation funds a new position through evaluate_buy, so it must not be
+    a way around the reduced caps."""
+    monkeypatch.setattr(rp, "ROTATION_ENABLED", True)
+    scores = {"JPM": 0.50, "MRNA": 0.90}
+    monkeypatch.setattr(pt.md, "compute_signals",
+                         lambda ticker: _signals_with_score(scores[ticker]))
+    positions = {"JPM": make_position(market_value=300.0)}
+    snapshot = make_snapshot(cash=500, portfolio_value=1000, positions=positions)
+    at_normal_cap = round(1000 * rp.MAX_TRADE_PCT_NEW_TICKER, 2)
+
+    assert pt.evaluate_rotation(snapshot, "JPM", "MRNA", at_normal_cap, None, conn)[2] is None
+
+    _write_breaker_state({"last_trip_at": _hours_ago_iso(1)})
+    _, _, reason = pt.evaluate_rotation(snapshot, "JPM", "MRNA", at_normal_cap, None, conn)
+    assert "buy leg would fail" in reason
+    assert "ramped to 50%" in reason
+
+
+def test_stop_loss_sells_are_never_ramped(conn, monkeypatch):
+    """Getting out must never be throttled - evaluate_sell has no size cap
+    to ramp, and the ramp must not have introduced one."""
+    _write_breaker_state({"last_trip_at": _hours_ago_iso(1)})
+    positions = {"AAPL": make_position(market_value=500.0)}
+    snapshot = make_snapshot(cash=100, portfolio_value=1000, positions=positions)
+    assert pt.evaluate_sell(snapshot, "AAPL", 500.0) is None

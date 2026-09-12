@@ -83,6 +83,34 @@ TECH_SCORE_THRESHOLD_NEW = 0.75          # historical value - NOT enforced, see 
 DAILY_DRAWDOWN_CIRCUIT_BREAKER_PCT = -0.08
 WEEKLY_DRAWDOWN_CIRCUIT_BREAKER_PCT = -0.15
 
+# --- Circuit-breaker ramp-down (added 2026-09-12) --------------------------
+# A cleared breaker used to resume new-buy sizing at FULL MAX_TRADE_PCT /
+# MAX_POSITION_PCT the very next cycle - the daily one auto-clearing
+# overnight, the weekly one via reset-circuit-breaker, either way straight
+# back to full size as though nothing had happened. A drawdown deep enough
+# to trip a breaker is itself evidence the next few cycles deserve smaller
+# size, not an instant return to normal.
+#
+# So: for CIRCUIT_BREAKER_RAMP_HOURS after the most recent trip of EITHER
+# kind, new-buy size caps are scaled by CIRCUIT_BREAKER_RAMP_MULTIPLIER.
+# The window is measured from the last TRIP, not from the clear, and it
+# deliberately survives reset-circuit-breaker - otherwise "clear it" would
+# still be a one-command return to full size, which is the exact behavior
+# this exists to remove.
+#
+# Wall-clock hours rather than a countdown of N cycles: a cycle counter has
+# to be decremented by something, which means either a mutable counter that
+# concurrent cycles can race on, or a scan of the decisions table. A
+# timestamp comparison is idempotent and stateless to read. At this
+# system's ~4 cycles per trading day, 48h is roughly 8 cycles, and it errs
+# long across a weekend rather than short.
+#
+# Applies to new BUYS only - same scope as the breakers themselves. The
+# stop-loss sweep and evaluate_sell are untouched: getting OUT must never
+# be throttled by a risk control.
+CIRCUIT_BREAKER_RAMP_HOURS = 48
+CIRCUIT_BREAKER_RAMP_MULTIPLIER = 0.5
+
 # --- Run coordination -----------------------------------------------------
 RUN_LOCK_STALE_MINUTES = 30      # a lockfile older than this is treated as abandoned
 
