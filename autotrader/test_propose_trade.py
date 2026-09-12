@@ -161,6 +161,23 @@ def test_buy_rejects_insufficient_cash_reserve(conn, monkeypatch):
     assert "reserve floor" in reason
 
 
+def test_cash_reserve_floor_is_five_percent_of_portfolio(conn, monkeypatch):
+    """Pins the 10% -> 5% change of 2026-09-12 by its BEHAVIOR, not by
+    re-asserting the constant: a buy landing between the old and new floors
+    must now pass. At $1,000 portfolio the floor is $50, so spending down to
+    $60 is fine where the old $100 floor would have rejected it."""
+    monkeypatch.setattr(pt.md, "compute_signals", lambda ticker: make_signals())
+    positions = {"AAPL": make_position(market_value=100.0)}
+    snapshot = make_snapshot(cash=100.0, portfolio_value=1000, positions=positions)
+
+    # leaves $60 cash: above the new $50 floor, below the old $100 one
+    assert pt.evaluate_buy(snapshot, "AAPL", 40.0, None, conn)[1] is None
+
+    # leaves $45: still correctly rejected, the floor didn't disappear
+    score, reason = pt.evaluate_buy(snapshot, "AAPL", 55.0, None, conn)
+    assert "reserve floor" in reason
+
+
 # --- evaluate_buy: new-ticker admission ---------------------------------
 
 def test_buy_rejects_new_ticker_with_insufficient_history(conn, monkeypatch):

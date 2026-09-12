@@ -14,7 +14,14 @@ ENABLED = True
 MAX_POSITION_PCT = 0.25          # a single ticker can't exceed 25% of portfolio value
 MAX_TRADE_PCT = 0.10             # a single order can't exceed 10% of portfolio value
 MAX_TRADE_PCT_NEW_TICKER = 0.05  # half-size for tickers not already held
-MIN_CASH_RESERVE_PCT = 0.10      # never let a buy push cash below 10% of portfolio value
+# Lowered 10% -> 5% on 2026-09-12. In a long-only account with no margin and
+# no fresh deposits, this floor isn't protecting against a margin call - it's
+# reserving the ability to act on a new idea without first selling something.
+# 10% was costing more than it protected: on a ~$1,128 book it held back $113
+# while the largest allowed new position was $56, so roughly two positions'
+# worth of capital sat permanently idle in a rising market. 5% keeps about one
+# position in reserve, which is what the floor is actually for.
+MIN_CASH_RESERVE_PCT = 0.05      # never let a buy push cash below 5% of portfolio value
 MIN_ORDER_NOTIONAL = 10.0        # reject dust orders under $10
 
 # --- Stop-loss --------------------------------------------------------

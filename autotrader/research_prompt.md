@@ -27,7 +27,7 @@ Follow these steps in order:
    reasoning.** The account never receives new deposits, so the only
    capital you will ever have is what is already there:
 
-       deployable = Cash − (Portfolio value × 0.10)     ← the reserve floor
+       deployable = Cash − (Portfolio value × 0.05)     ← the reserve floor
 
    Cash above that floor is **not** a safety buffer, it is capital sitting
    idle. It earns nothing, and in a rising market that is a real, ongoing
