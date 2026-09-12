@@ -13,7 +13,6 @@
       "Bash(curl *)",
       "Bash(wget *)",
       "Bash(git push*)",
-      "Bash(git commit*)",
       "Bash(*config.py*)"
     ]
   }
