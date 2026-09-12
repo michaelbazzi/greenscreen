@@ -5,3 +5,6 @@ __pycache__/
 trades.db
 .pytest_cache/
 webapp/data/
+.DS_Store
+.claude/launch.json
+GreenScreen-backtest/
