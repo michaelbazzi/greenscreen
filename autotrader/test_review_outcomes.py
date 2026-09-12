@@ -22,13 +22,24 @@ def conn():
     c.close()
 
 
-def _log(conn, ticker, action, days_ago, passed=1, score=0.75):
+def _log(conn, ticker, action, days_ago, passed=1, score=0.75, order_id="order-1"):
     ts = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
     log_decision(conn, (
         ts, f"run-{ticker}-{days_ago}", ticker, action, "notional", 40.0,
-        score, "test", None, passed, None if passed else "rejected", "order-1" if passed else None,
+        score, "test", None, passed, None if passed else "rejected",
+        order_id if passed else None,
     ))
     return ts
+
+
+def test_reviewable_decisions_excludes_dry_runs(conn):
+    """A --dry-run logs an approved decision but places no order, so there
+    was never a position and there is no outcome to measure."""
+    _log(conn, "AAPL", "buy", days_ago=10, order_id=None)  # dry-run
+    _log(conn, "MSFT", "buy", days_ago=10)                  # really executed
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    rows = ro.find_reviewable_decisions(conn, cutoff)
+    assert [r[1] for r in rows] == ["MSFT"]
 
 
 def test_reviewable_decisions_excludes_too_recent(conn):

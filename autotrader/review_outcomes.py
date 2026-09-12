@@ -61,11 +61,21 @@ def price_near(ticker, target_dt):
 
 
 def find_reviewable_decisions(conn, cutoff_str):
+    """Approved, aged, not-yet-reviewed decisions that ACTUALLY EXECUTED.
+
+    order_id IS NOT NULL is what separates a real trade from a --dry-run:
+    both are logged with risk_checks_passed = 1, but a dry-run never placed
+    an order, so no position was ever held and there is no outcome to
+    measure. Reviewing them anyway records the price drift of a trade that
+    never happened and files it as evidence about the system's judgment.
+    That is exactly what had happened by 2026-09-12: 8 of the 13
+    outcome-reviewed decisions were dry-runs."""
     return conn.execute(
         """SELECT id, ticker, action, timestamp_utc, technical_score
            FROM decisions
            WHERE risk_checks_passed = 1
              AND action IN ('buy', 'sell')
+             AND order_id IS NOT NULL
              AND timestamp_utc <= ?
              AND id NOT IN (SELECT decision_id FROM outcomes)
            ORDER BY timestamp_utc""",
